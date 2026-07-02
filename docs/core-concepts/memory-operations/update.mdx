@@ -143,6 +143,10 @@ await memory.update("mem_123", {
 </CodeGroup>
 
 <Note>
+  In the OSS SDKs `text` is optional — pass only `metadata` and/or `expiration_date` (`expirationDate` in JavaScript) to update those while keeping the existing content. At least one of the three must be provided.
+</Note>
+
+<Note>
   `data` is a deprecated alias for `text` in the OSS SDKs — Python `data=` and JavaScript `{ data }`. It still works but logs a warning; prefer `text`.
 </Note>
 

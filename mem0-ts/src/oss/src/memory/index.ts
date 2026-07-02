@@ -1627,15 +1627,23 @@ export class Memory {
       metadata = textOrOptions.metadata;
       expirationDate = textOrOptions.expirationDate;
     }
-    if (text === undefined || text === null) {
+    // Match Python OSS: at least one of text / metadata / expirationDate is
+    // required. A metadata-only or expiration-only update keeps the stored text.
+    if (text == null && metadata == null && expirationDate === undefined) {
       throw new Error(
-        "Memory.update() requires `text` (or the deprecated `data`) to be provided.",
+        "Memory.update() requires at least one of `text`, `metadata`, or `expirationDate`.",
       );
     }
 
     await this._ensureInitialized();
     await this._captureEvent("update", { memory_id: memoryId });
-    const embedding = await this.embedder.embed(text);
+
+    // Only embed when new content is provided; a metadata-only update reuses
+    // the stored text (re-embedded inside updateMemory).
+    const existingEmbeddings: Record<string, number[]> = {};
+    if (text != null) {
+      existingEmbeddings[text] = await this.embedder.embed(text);
+    }
 
     const updateMetadata: Record<string, any> = { ...(metadata ?? {}) };
     if (expirationDate !== undefined) {
@@ -1648,8 +1656,8 @@ export class Memory {
 
     await this.updateMemory(
       memoryId,
-      text,
-      { [text]: embedding },
+      text ?? undefined,
+      existingEmbeddings,
       updateMetadata,
     );
     const result = { message: "Memory updated successfully!" };
@@ -1902,7 +1910,7 @@ export class Memory {
 
   private async updateMemory(
     memoryId: string,
-    data: string,
+    data: string | undefined,
     existingEmbeddings: Record<string, number[]>,
     metadata: Record<string, any> = {},
   ): Promise<string> {
@@ -1912,15 +1920,24 @@ export class Memory {
     }
 
     const prevValue = existingMemory.payload.data;
+    // Metadata-only update: fall back to the stored text so we can re-index it.
+    const newData = data ?? prevValue;
+    if (typeof newData !== "string") {
+      throw new Error(
+        `Memory with ID ${memoryId} does not have text content to update`,
+      );
+    }
+    const textChanged = newData !== prevValue;
+
     const embedding =
-      existingEmbeddings[data] || (await this.embedder.embed(data));
+      existingEmbeddings[newData] || (await this.embedder.embed(newData));
 
     const newMetadata = {
       ...existingMemory.payload,
       ...metadata,
-      data,
-      hash: createHash("md5").update(data).digest("hex"),
-      textLemmatized: lemmatizeForBm25(data),
+      data: newData,
+      hash: createHash("md5").update(newData).digest("hex"),
+      textLemmatized: lemmatizeForBm25(newData),
       createdAt: existingMemory.payload.createdAt,
       updatedAt: new Date().toISOString(),
     };
@@ -1929,20 +1946,22 @@ export class Memory {
     await this.db.addHistory(
       memoryId,
       prevValue,
-      data,
+      newData,
       "UPDATE",
       newMetadata.createdAt,
       newMetadata.updatedAt,
     );
 
-    // Entity-store cleanup: strip this memory's id from old-text entities,
-    // then re-extract entities from the new text and link them back.
-    try {
-      const sessionFilters = this._sessionFiltersFromPayload(newMetadata);
-      await this._removeMemoryFromEntityStore(memoryId, sessionFilters);
-      await this._linkEntitiesForMemory(memoryId, data, sessionFilters);
-    } catch (e) {
-      console.warn(`Entity store cleanup/link failed during update: ${e}`);
+    // Entity-store cleanup only when the text changed: strip this memory's id
+    // from old-text entities, then re-extract from the new text and link back.
+    if (textChanged) {
+      try {
+        const sessionFilters = this._sessionFiltersFromPayload(newMetadata);
+        await this._removeMemoryFromEntityStore(memoryId, sessionFilters);
+        await this._linkEntitiesForMemory(memoryId, newData, sessionFilters);
+      } catch (e) {
+        console.warn(`Entity store cleanup/link failed during update: ${e}`);
+      }
     }
 
     return memoryId;

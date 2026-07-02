@@ -335,15 +335,43 @@ describe("Memory - update()", () => {
     );
   });
 
-  test("throws when neither text nor data is provided", async () => {
+  test("updates metadata only, keeping the stored text", async () => {
+    const addResult: SearchResult = await memory.add("Keep this text", {
+      userId,
+      infer: false,
+    });
+    const id = addResult.results[0].id;
+    await memory.update(id, { metadata: { category: "kept" } });
+    const after: MemoryItem | null = await memory.get(id);
+    expect(after!.memory).toBe("Keep this text");
+    expect(after!.metadata).toEqual(
+      expect.objectContaining({ category: "kept" }),
+    );
+  });
+
+  test("updates expiration only, keeping the stored text", async () => {
+    const addResult: SearchResult = await memory.add("Keep on expiry", {
+      userId,
+      infer: false,
+    });
+    const id = addResult.results[0].id;
+    await memory.update(id, { expirationDate: "2099-06-30" });
+    const after: MemoryItem | null = await memory.get(id);
+    expect(after!.memory).toBe("Keep on expiry");
+    expect(after!.metadata).toEqual(
+      expect.objectContaining({ expiration_date: "2099-06-30" }),
+    );
+  });
+
+  test("throws when no field is provided", async () => {
     const addResult: SearchResult = await memory.add("No content", {
       userId,
       infer: false,
     });
     const id = addResult.results[0].id;
-    await expect(
-      memory.update(id, { metadata: { category: "x" } }),
-    ).rejects.toThrow("requires `text`");
+    await expect(memory.update(id, {})).rejects.toThrow(
+      "at least one of `text`",
+    );
   });
 });
 
