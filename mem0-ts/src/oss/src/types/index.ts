@@ -54,6 +54,45 @@ export interface LLMConfig {
   maxTokens?: number;
 }
 
+export interface RerankerConfig {
+  apiKey?: string;
+  model?: string;
+  /** Cap on how many reranked results to return. */
+  topN?: number;
+  /**
+   * Local cross-encoder rerankers (`sentence_transformer`, `huggingface`) only.
+   * Transformers.js device, e.g. `"cpu"`, `"wasm"`, `"webgpu"`. Defaults to
+   * Transformers.js auto-detection when omitted.
+   */
+  device?: string;
+  /**
+   * Local cross-encoder rerankers: max token length per query-document pair.
+   * Defaults to the model's own maximum when omitted.
+   */
+  maxLength?: number;
+  /**
+   * Local cross-encoder rerankers: sigmoid-normalize raw logits to `[0, 1]`.
+   * Defaults to `true`; set `false` to surface raw cross-encoder logits.
+   */
+  normalize?: boolean;
+  /**
+   * Accepted for parity with the Python SDK's local cross-encoder rerankers,
+   * but no-ops in this runtime (a memory search reranks a small candidate set
+   * in a single in-process forward pass).
+   */
+  batchSize?: number;
+  showProgressBar?: boolean;
+  /**
+   * LLM reranker only. If omitted, the LLM reranker reuses the Memory's main
+   * `llm`, so no duplicate LLM config is needed for the common case.
+   */
+  llm?: {
+    provider: string;
+    config: LLMConfig;
+  };
+  [key: string]: any;
+}
+
 export interface MemoryConfig {
   version?: string;
   embedder: {
@@ -67,6 +106,10 @@ export interface MemoryConfig {
   llm: {
     provider: string;
     config: LLMConfig;
+  };
+  reranker?: {
+    provider: string;
+    config: RerankerConfig;
   };
   historyStore?: HistoryStoreConfig;
   disableHistory?: boolean;
@@ -143,6 +186,12 @@ export const MemoryConfigSchema = z.object({
   historyDbPath: z.string().optional(),
   customInstructions: z.string().optional(),
   historyStore: z
+    .object({
+      provider: z.string(),
+      config: z.record(z.string(), z.any()),
+    })
+    .optional(),
+  reranker: z
     .object({
       provider: z.string(),
       config: z.record(z.string(), z.any()),

@@ -103,3 +103,30 @@ config = {
     }
 }
 ```
+
+## TypeScript SDK
+
+The self-hosted [TypeScript SDK](/open-source/features/reranker-search#typescript-sdk) (`mem0ai/oss`) supports the same five providers. Config keys are camelCase (`apiKey`, `topN`, `maxLength`) and each provider's SDK is a peer dependency you install per reranker.
+
+| Provider | Install | Default model | Key config fields |
+| --- | --- | --- | --- |
+| `cohere` | `pnpm add cohere-ai` | `rerank-v3.5` | `apiKey`, `model`, `topN` |
+| `zeroentropy` | `pnpm add zeroentropy` | `zerank-1` | `apiKey`, `model`, `topN` |
+| `sentence_transformer` | `pnpm add @huggingface/transformers` | `Xenova/ms-marco-MiniLM-L-6-v2` | `model`, `device`, `maxLength`, `normalize`, `topN` |
+| `huggingface` | `pnpm add @huggingface/transformers` | `Xenova/bge-reranker-base` | `model`, `device`, `maxLength`, `normalize`, `topN` |
+| `llm` | — (reuses your `llm`) | reuses the Memory's `llm` | `llm` (optional dedicated provider), `topN` |
+
+```typescript
+import { Memory } from "mem0ai/oss";
+
+const memory = new Memory({
+  reranker: {
+    provider: "zeroentropy",
+    config: { apiKey: process.env.ZEROENTROPY_API_KEY, topN: 5 },
+  },
+});
+```
+
+<Note>
+  The local cross-encoder providers (`sentence_transformer`, `huggingface`) run on [Transformers.js](https://huggingface.co/docs/transformers.js) and default to ONNX (`Xenova/*`) model mirrors, so Python default model strings must be swapped for their ONNX equivalents. `batchSize` and `showProgressBar` are accepted for parity with Python but are no-ops in the TypeScript runtime. See the [reranker feature guide](/open-source/features/reranker-search#typescript-sdk) for full examples.
+</Note>

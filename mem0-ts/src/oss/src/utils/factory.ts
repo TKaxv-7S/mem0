@@ -11,8 +11,14 @@ import {
   EmbeddingConfig,
   HistoryStoreConfig,
   LLMConfig,
+  RerankerConfig,
   VectorStoreConfig,
 } from "../types";
+import { Reranker } from "../rerankers/base";
+import { CohereReranker } from "../rerankers/cohere";
+import { LLMReranker } from "../rerankers/llm";
+import { ZeroEntropyReranker } from "../rerankers/zeroentropy";
+import { CrossEncoderReranker } from "../rerankers/cross_encoder";
 import { Embedder } from "../embeddings/base";
 import { LLM } from "../llms/base";
 import { VectorStore } from "../vector_stores/base";
@@ -118,6 +124,38 @@ export class VectorStoreFactory {
         return new PGVector(config as any);
       default:
         throw new Error(`Unsupported vector store provider: ${provider}`);
+    }
+  }
+}
+
+export class RerankerFactory {
+  static create(
+    provider: string,
+    config: RerankerConfig,
+    defaultLLM?: LLM,
+  ): Reranker {
+    switch (provider.toLowerCase()) {
+      case "cohere":
+        return new CohereReranker(config);
+      case "zeroentropy":
+        return new ZeroEntropyReranker(config);
+      case "sentence_transformer":
+        return new CrossEncoderReranker(
+          config,
+          "Xenova/ms-marco-MiniLM-L-6-v2",
+        );
+      case "huggingface":
+        return new CrossEncoderReranker(config, "Xenova/bge-reranker-base");
+      case "llm": {
+        // Use a dedicated LLM if the reranker config names one, otherwise fall
+        // back to the Memory's main LLM.
+        const llm = config.llm
+          ? LLMFactory.create(config.llm.provider, config.llm.config)
+          : defaultLLM;
+        return new LLMReranker(config, llm);
+      }
+      default:
+        throw new Error(`Unsupported reranker provider: ${provider}`);
     }
   }
 }

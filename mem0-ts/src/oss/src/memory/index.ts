@@ -13,6 +13,7 @@ import {
   LLMFactory,
   VectorStoreFactory,
   HistoryManagerFactory,
+  RerankerFactory,
 } from "../utils/factory";
 import {
   FactRetrievalSchema,
@@ -28,6 +29,7 @@ import {
 import { DummyHistoryManager } from "../storage/DummyHistoryManager";
 import { Embedder } from "../embeddings/base";
 import { LLM } from "../llms/base";
+import { Reranker } from "../rerankers/base";
 import { VectorStore } from "../vector_stores/base";
 import { ConfigManager } from "../config/manager";
 
@@ -161,6 +163,7 @@ export class Memory {
   private embedder: Embedder;
   private vectorStore!: VectorStore;
   private llm: LLM;
+  private reranker: Reranker | null = null;
   private db: HistoryManager;
   private collectionName: string | undefined;
   private apiVersion: string;
@@ -185,6 +188,13 @@ export class Memory {
       this.config.llm.provider,
       this.config.llm.config,
     );
+    if (this.config.reranker) {
+      this.reranker = RerankerFactory.create(
+        this.config.reranker.provider,
+        this.config.reranker.config,
+        this.llm,
+      );
+    }
     if (this.config.disableHistory) {
       this.db = new DummyHistoryManager();
     } else {
@@ -1526,8 +1536,27 @@ export class Memory {
         };
       });
 
+    // Step 10: Optionally re-rank with the configured reranker. Opt-in per
+    // search via `rerank: true`; a no-op when no reranker is configured.
+    let finalResults = results;
+    if (config.rerank && this.reranker && results.length > 0) {
+      try {
+        const ranked = await this.reranker.rerank(
+          query,
+          results.map((r) => r.memory),
+          topK,
+        );
+        finalResults = ranked.map((r) => ({
+          ...results[r.index],
+          score: r.relevanceScore,
+        }));
+      } catch (e) {
+        console.warn(`Reranking failed, using original results: ${e}`);
+      }
+    }
+
     const result = {
-      results,
+      results: finalResults,
     };
     const searchElapsedMs = Date.now() - searchStartMs;
     if (temporalUsageNotice) {

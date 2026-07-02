@@ -67,6 +67,29 @@ config = {
 }
 ```
 
+## TypeScript (self-hosted)
+
+The [TypeScript OSS SDK](/open-source/features/reranker-search#typescript-sdk) (`mem0ai/oss`) ships the LLM reranker under the provider name `llm`. It reuses the Memory's main `llm` unless you pass a dedicated one under `config.llm` — no extra install needed.
+
+```typescript
+import { Memory } from "mem0ai/oss";
+
+const memory = new Memory({
+  llm: { provider: "openai", config: { apiKey: process.env.OPENAI_API_KEY } },
+  reranker: {
+    provider: "llm",
+    // Reuses the `llm` above. To override with a dedicated model:
+    // config: { llm: { provider: "openai", config: { model: "gpt-5-mini", apiKey: "..." } } }
+    config: {},
+  },
+});
+
+const results = await memory.search("What movies do I like?", {
+  filters: { userId: "alice" },
+  rerank: true,
+});
+```
+
 ## Supported LLM Providers
 
 ### OpenAI
