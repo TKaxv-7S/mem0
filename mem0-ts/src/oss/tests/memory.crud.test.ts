@@ -127,6 +127,37 @@ describe("Memory - get()", () => {
     expect(item!.createdAt).toBeDefined();
     expect(new Date(item!.createdAt!).toString()).not.toBe("Invalid Date");
   });
+
+  test("stores a normalized expiration date passed to add()", async () => {
+    const addResult: SearchResult = await memory.add("Expiry via add", {
+      userId,
+      infer: false,
+      expirationDate: "2099-12-31",
+    });
+    const item: MemoryItem | null = await memory.get(addResult.results[0].id);
+    expect(item!.metadata).toEqual(
+      expect.objectContaining({ expiration_date: "2099-12-31" }),
+    );
+  });
+
+  test("rejects an invalid expiration date passed to add()", async () => {
+    await expect(
+      memory.add("Bad expiry via add", {
+        userId,
+        infer: false,
+        expirationDate: "not-a-date",
+      }),
+    ).rejects.toThrow("YYYY-MM-DD");
+  });
+
+  test("omits expiration_date when none is provided to add()", async () => {
+    const addResult: SearchResult = await memory.add("No expiry", {
+      userId,
+      infer: false,
+    });
+    const item: MemoryItem | null = await memory.get(addResult.results[0].id);
+    expect(item!.metadata?.expiration_date).toBeUndefined();
+  });
 });
 
 // ─── update() ────────────────────────────────────────────
@@ -205,6 +236,114 @@ describe("Memory - update()", () => {
     expect(after!.metadata).toEqual(
       expect.objectContaining({ category: "hobbies", priority: "high" }),
     );
+  });
+
+  test("merges metadata passed to update()", async () => {
+    const addResult: SearchResult = await memory.add("Metadata via update", {
+      userId,
+      infer: false,
+    });
+    const id = addResult.results[0].id;
+    await memory.update(id, "Metadata via update", { category: "travel" });
+    const after: MemoryItem | null = await memory.get(id);
+    expect(after!.metadata).toEqual(
+      expect.objectContaining({ category: "travel" }),
+    );
+  });
+
+  test("stores a normalized expiration date passed to update()", async () => {
+    const addResult: SearchResult = await memory.add("Expiry via update", {
+      userId,
+      infer: false,
+    });
+    const id = addResult.results[0].id;
+    await memory.update(id, "Expiry via update", undefined, "2099-12-31");
+    const after: MemoryItem | null = await memory.get(id);
+    expect(after!.metadata).toEqual(
+      expect.objectContaining({ expiration_date: "2099-12-31" }),
+    );
+  });
+
+  test("rejects an invalid expiration date", async () => {
+    const addResult: SearchResult = await memory.add("Bad expiry", {
+      userId,
+      infer: false,
+    });
+    const id = addResult.results[0].id;
+    await expect(
+      memory.update(id, "Bad expiry", undefined, "not-a-date"),
+    ).rejects.toThrow("YYYY-MM-DD");
+  });
+
+  test("accepts an options object with text", async () => {
+    const addResult: SearchResult = await memory.add("Object form before", {
+      userId,
+      infer: false,
+    });
+    const id = addResult.results[0].id;
+    await memory.update(id, { text: "Object form after" });
+    const after: MemoryItem | null = await memory.get(id);
+    expect(after!.memory).toBe("Object form after");
+  });
+
+  test("accepts the deprecated `data` alias and warns", async () => {
+    const addResult: SearchResult = await memory.add("Data alias before", {
+      userId,
+      infer: false,
+    });
+    const id = addResult.results[0].id;
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    await memory.update(id, { data: "Data alias after" });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("`data` is deprecated"),
+    );
+    warn.mockRestore();
+    const after: MemoryItem | null = await memory.get(id);
+    expect(after!.memory).toBe("Data alias after");
+  });
+
+  test("prefers `text` over `data` when both are given", async () => {
+    const addResult: SearchResult = await memory.add("Both before", {
+      userId,
+      infer: false,
+    });
+    const id = addResult.results[0].id;
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    await memory.update(id, { text: "Winner", data: "Loser" });
+    warn.mockRestore();
+    const after: MemoryItem | null = await memory.get(id);
+    expect(after!.memory).toBe("Winner");
+  });
+
+  test("merges metadata and expiration via the options object", async () => {
+    const addResult: SearchResult = await memory.add("Object meta before", {
+      userId,
+      infer: false,
+    });
+    const id = addResult.results[0].id;
+    await memory.update(id, {
+      text: "Object meta after",
+      metadata: { category: "work" },
+      expirationDate: "2099-01-01",
+    });
+    const after: MemoryItem | null = await memory.get(id);
+    expect(after!.metadata).toEqual(
+      expect.objectContaining({
+        category: "work",
+        expiration_date: "2099-01-01",
+      }),
+    );
+  });
+
+  test("throws when neither text nor data is provided", async () => {
+    const addResult: SearchResult = await memory.add("No content", {
+      userId,
+      infer: false,
+    });
+    const id = addResult.results[0].id;
+    await expect(
+      memory.update(id, { metadata: { category: "x" } }),
+    ).rejects.toThrow("requires `text`");
   });
 });
 

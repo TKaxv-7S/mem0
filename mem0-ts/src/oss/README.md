@@ -110,9 +110,11 @@ You only need to provide API keys - all other settings are optional.
 ### Methods
 
 - `add(messages: string | Message[], userId?: string, ...): Promise<SearchResult>`
+  - Options include `metadata`, `infer`, and `expirationDate` (a `YYYY-MM-DD` date after which the memory is treated as expired).
 - `search(query: string, userId?: string, ...): Promise<SearchResult>`
 - `get(memoryId: string): Promise<MemoryItem | null>`
-- `update(memoryId: string, text: string): Promise<{ message: string }>`
+- `update(memoryId: string, text: string, metadata?: Record<string, any>, expirationDate?: string | null): Promise<{ message: string }>`
+  - Also accepts an options object: `update(memoryId, { text, metadata?, expirationDate? })`. `data` is a deprecated alias for `text` (logs a warning).
 - `delete(memoryId: string): Promise<{ message: string }>`
 - `deleteAll(userId?: string, ...): Promise<{ message: string }>`
 - `history(memoryId: string): Promise<any[]>`

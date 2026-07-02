@@ -713,6 +713,13 @@ export class Memory {
     if (agentId) filters.agent_id = metadata.agent_id = agentId;
     if (runId) filters.run_id = metadata.run_id = runId;
 
+    // Normalize expiration date into the stored metadata (round-trips via get()).
+    if (config.expirationDate != null) {
+      metadata.expiration_date = this.normalizeExpirationDate(
+        config.expirationDate,
+      );
+    }
+
     if (!filters.user_id && !filters.agent_id && !filters.run_id) {
       throw new Error(
         "One of the filters: userId, agentId or runId is required!",
@@ -1563,11 +1570,88 @@ export class Memory {
     return result;
   }
 
-  async update(memoryId: string, text: string): Promise<{ message: string }> {
+  /**
+   * Update a memory's content, and optionally its metadata and expiration date.
+   *
+   * @param memoryId - ID of the memory to update.
+   * @param text - New content for the memory.
+   * @param metadata - Optional metadata to merge into the stored memory.
+   * @param expirationDate - Optional expiration date (YYYY-MM-DD), or null to clear it.
+   */
+  async update(
+    memoryId: string,
+    text: string,
+    metadata?: Record<string, any>,
+    expirationDate?: string | null,
+  ): Promise<{ message: string }>;
+  /**
+   * Update a memory using an options object.
+   *
+   * @param memoryId - ID of the memory to update.
+   * @param options - New content plus optional metadata and expiration date.
+   *   Provide the content as `text`; `data` is a deprecated alias for `text`.
+   */
+  async update(
+    memoryId: string,
+    options: {
+      text?: string;
+      /** @deprecated Use `text` instead. Will be removed in a future release. */
+      data?: string;
+      metadata?: Record<string, any>;
+      expirationDate?: string | null;
+    },
+  ): Promise<{ message: string }>;
+  async update(
+    memoryId: string,
+    textOrOptions:
+      | string
+      | {
+          text?: string;
+          data?: string;
+          metadata?: Record<string, any>;
+          expirationDate?: string | null;
+        },
+    metadata?: Record<string, any>,
+    expirationDate?: string | null,
+  ): Promise<{ message: string }> {
+    let text: string | undefined;
+    if (typeof textOrOptions === "string") {
+      text = textOrOptions;
+    } else {
+      if (textOrOptions.data !== undefined) {
+        console.warn(
+          "Memory.update(): `data` is deprecated and will be removed in a future release. Use `text` instead.",
+        );
+      }
+      text = textOrOptions.text ?? textOrOptions.data;
+      metadata = textOrOptions.metadata;
+      expirationDate = textOrOptions.expirationDate;
+    }
+    if (text === undefined || text === null) {
+      throw new Error(
+        "Memory.update() requires `text` (or the deprecated `data`) to be provided.",
+      );
+    }
+
     await this._ensureInitialized();
     await this._captureEvent("update", { memory_id: memoryId });
     const embedding = await this.embedder.embed(text);
-    await this.updateMemory(memoryId, text, { [text]: embedding });
+
+    const updateMetadata: Record<string, any> = { ...(metadata ?? {}) };
+    if (expirationDate !== undefined) {
+      // null clears an existing expiration; a string is normalized to YYYY-MM-DD.
+      updateMetadata.expiration_date =
+        expirationDate === null
+          ? null
+          : this.normalizeExpirationDate(expirationDate);
+    }
+
+    await this.updateMemory(
+      memoryId,
+      text,
+      { [text]: embedding },
+      updateMetadata,
+    );
     const result = { message: "Memory updated successfully!" };
     await this._displayFirstRunNotice("update");
     return result;
@@ -1774,6 +1858,17 @@ export class Memory {
       await this._displayFirstRunNotice("get_all");
     }
     return result;
+  }
+
+  // Normalize a user-supplied expiration date to a YYYY-MM-DD string.
+  private normalizeExpirationDate(value: string): string {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new Error(
+        "expirationDate must be a valid date in YYYY-MM-DD format.",
+      );
+    }
+    return parsed.toISOString().slice(0, 10);
   }
 
   private async createMemory(

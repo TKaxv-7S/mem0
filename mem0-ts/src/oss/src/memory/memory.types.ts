@@ -12,6 +12,8 @@ export interface AddMemoryOptions extends Entity {
   filters?: SearchFilters;
   infer?: boolean;
   timestamp?: number | string | Date | null;
+  /** Date (YYYY-MM-DD) after which the memory is considered expired. */
+  expirationDate?: string | null;
 }
 
 export interface SearchMemoryOptions {
