@@ -112,7 +112,7 @@ memory = Memory()
 
 memory.update(
     memory_id="mem_123",
-    data="Alex now prefers decaf coffee",
+    text="Alex now prefers decaf coffee",
 )
 ```
 ```
@@ -138,7 +138,7 @@ memory.update(
 
 | Capability | Mem0 Platform | Mem0 OSS |
 | --- | --- | --- |
-| Update call | `client.update(memory_id, {...})` | `memory.update(memory_id, data=...)` |
+| Update call | `client.update(memory_id, {...})` | `memory.update(memory_id, text=...)` |
 | Batch updates | `client.batch_update` (up to 1000 memories) | Script your own loop or bulk job |
 | Dashboard visibility | Inspect updates in the UI | Inspect via logs or custom tooling |
 | Immutable handling | Returns descriptive error | Raises exception: delete and re-add |

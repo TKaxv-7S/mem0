@@ -1563,11 +1563,11 @@ export class Memory {
     return result;
   }
 
-  async update(memoryId: string, data: string): Promise<{ message: string }> {
+  async update(memoryId: string, text: string): Promise<{ message: string }> {
     await this._ensureInitialized();
     await this._captureEvent("update", { memory_id: memoryId });
-    const embedding = await this.embedder.embed(data);
-    await this.updateMemory(memoryId, data, { [data]: embedding });
+    const embedding = await this.embedder.embed(text);
+    await this.updateMemory(memoryId, text, { [text]: embedding });
     const result = { message: "Memory updated successfully!" };
     await this._displayFirstRunNotice("update");
     return result;
